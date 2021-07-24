@@ -1,18 +1,19 @@
 #include <ADS1115_WE.h>
-#include<Wire.h>
+#include <Wire.h>
 #include <ArduinoQueue.h> // https://github.com/EinarArnason/ArduinoQueue
-#include <SD.h>
-
+#include <SPI.h>
+#include <SdFat.h>
 
 #define I2C_ADDRESS 0x48
 #define QUEUE_SIZE  64
-#define TRIGGER_FRAME_COUNTER_INIT 25
+#define TRIGGER_DELAY 0.1
 
 ADS1115_WE adc = ADS1115_WE(I2C_ADDRESS);
 ArduinoQueue<float> readingQueue(QUEUE_SIZE); // approx one second.
 float trigger_voltage_mV = 30; // will save data if exceeded
-int trigger_counter = TRIGGER_FRAME_COUNTER_INIT; //~0.1 sec.
 bool trigger_activated;
+
+
 
 /*
  *  Geophone docs: http://cdn.sparkfun.com/datasheets/Sensors/Accelerometers/SM-24%20Brochure.pdf
@@ -20,11 +21,19 @@ bool trigger_activated;
  */
 
 unsigned long int frame_counter;
+unsigned long trigger_time;
+SdFat sd;
+const int chipSelect = 10;
+
+
 
 void setup() {
   
   Wire.begin();
   Serial.begin(9600);
+
+  delay(100);
+  
   if(!adc.init()){
     Serial.println("ADS1115 not connected!");
   }
@@ -32,13 +41,12 @@ void setup() {
   {
     Serial.println("ADS115 connected");
   }
-
-  Serial.print("Initializing SD card...");
-  if (!SD.begin(10)) {
-    Serial.println("initialization failed!");
-    while (1);
+  
+  delay(100);
+  
+  if (!sd.begin(chipSelect, SPI_HALF_SPEED)){
+    sd.initErrorHalt();
   }
-  Serial.println("initialization done.");
   
   
   adc.setVoltageRange_mV(ADS1115_RANGE_6144); //comment line/change parameter to change range 
@@ -46,36 +54,28 @@ void setup() {
   //adc.setVoltageRange_mV(ADS1115_RANGE_1024);
   //adc.setVoltageRange_mV(ADS1115_RANGE_0512);
   frame_counter = 0;
-  trigger_activated = false;
+  trigger_activated = false;  
 }
 
 void loop() {
   float voltage = 0.0;
   
  // Serial.print("0: ");
-  voltage = readChannel(ADS1115_COMP_0_1);
+  voltage = readChannel(ADS1115_COMP_0_1); 
   readingQueue.enqueue(voltage);
-  if (fabs(voltage) > trigger_voltage_mV && trigger_activated == false)  
+
+  
+  if (fabs(voltage) > trigger_voltage_mV && trigger_activated == false)
   {
     trigger_activated = true;
-    //Serial.println("Trigger activated");
+    trigger_time = millis();
+    Serial.println("Trigger activated");
   }  
 
-  if (trigger_activated) {
-    if (trigger_counter > 0)
-     trigger_counter--;   
-     
-    if (trigger_counter == 0 && readingQueue.isFull())
-    {
-        trigger_counter = TRIGGER_FRAME_COUNTER_INIT;      
-        saveData(); 
-        trigger_activated = false;
-    }
+  if (trigger_activated && millis() - trigger_time > 100 && readingQueue.isFull()) {
+    trigger_activated = false;
+    saveData();   
   }
-  //Serial.println(readingQueue.itemCount());
-  
-  //Serial.println(voltage);
-  //delay(10);  
   
   frame_counter++;
   if (frame_counter % 1000 == 0)
@@ -98,19 +98,37 @@ float readChannel(ADS1115_MUX channel) {
 void saveData() {
   char file_name[16];
   int idx = getAvailableFileNameIdx();
+  SdFile logFile;
 
-  sprintf(file_name, "log_%d.txt", idx);  
+
+  sprintf(file_name, "LOG%d.TXT", idx);    
   Serial.println("Saving data to");
   Serial.println(file_name);
   
-  File logFile = SD.open(file_name, FILE_WRITE);
-  while (!readingQueue.isEmpty())
-  {
-    float x = readingQueue.dequeue();   
-    logFile.println(x);
+  String data_string = "";
+  if (logFile.open(file_name,  O_RDWR | O_CREAT | O_AT_END))
+  {  
+    int num_pt = 0;
+    while (!readingQueue.isEmpty())
+    {
+      float x = readingQueue.dequeue();   
+      data_string = String(x);
+      logFile.println(data_string);
+      num_pt++;
+    }
+   logFile.close();  
+   Serial.println("Data written");
+   Serial.println(file_name); 
+   Serial.println(num_pt);
   }
-  Serial.println("data file saved");
-  logFile.close();  
+  else
+  {
+   Serial.println("Cant open file for writing");
+   Serial.println(file_name); 
+   Serial.println(logFile);
+  }  
+
+  //delay(100);
   
 }
 
@@ -121,8 +139,8 @@ int getAvailableFileNameIdx()
 
  while (1)
  {
-   sprintf(file_name, "log_%d.txt", idx);
-   if (!SD.exists(file_name)) return idx;
+   sprintf(file_name, "LOG%d.TXT", idx);
+   if (!sd.exists(file_name)) return idx;
    idx++;
  } 
  
