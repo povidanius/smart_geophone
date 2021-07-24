@@ -67,9 +67,9 @@ void loop() {
      
     if (trigger_counter == 0 && readingQueue.isFull())
     {
-        trigger_counter = TRIGGER_FRAME_COUNTER_INIT; 
-        trigger_activated = false;
+        trigger_counter = TRIGGER_FRAME_COUNTER_INIT;      
         saveData(); 
+        trigger_activated = false;
     }
   }
   //Serial.println(readingQueue.itemCount());
@@ -109,7 +109,7 @@ void saveData() {
     float x = readingQueue.dequeue();   
     logFile.println(x);
   }
-
+  Serial.println("data file saved");
   logFile.close();  
   
 }
@@ -121,14 +121,9 @@ int getAvailableFileNameIdx()
 
  while (1)
  {
-  sprintf(file_name, "log_%d.txt", idx);
-  File myFile = SD.open(file_name);
-  if (!myFile) {
-    myFile.close();
-    return idx;
-  }
-  myFile.close(); 
-  idx++;
+   sprintf(file_name, "log_%d.txt", idx);
+   if (!SD.exists(file_name)) return idx;
+   idx++;
  } 
  
 }
