@@ -31,7 +31,7 @@ void setup() {
   
   Wire.begin();
   Serial.begin(9600);
-
+  Serial.println("Smart seismic sensor");
   delay(100);
   
   if(!adc.init()){
