@@ -13,6 +13,9 @@ ArduinoQueue<float> readingQueue(QUEUE_SIZE); // approx one second.
 float trigger_voltage_mV = 30; // will save data if exceeded
 bool trigger_activated;
 
+#define OPERATION_MODE_PLOT 1 
+//#define OPERATION_MODE_CONTINUOUS_ACQUISITION 1
+//#define OPERATION_MODE_EVENT_TRIGGER 1
 
 
 /*
@@ -59,9 +62,14 @@ void setup() {
 
 void loop() {
   float voltage = 0.0;
-  
- // Serial.print("0: ");
   voltage = readChannel(ADS1115_COMP_0_1); 
+
+  #ifdef OPERATION_MODE_PLOT
+   Serial.print("0: ");
+   Serial.println(voltage);
+  #endif
+
+  #ifdef OPERATION_MODE_EVENT_TRIGGER
   readingQueue.enqueue(voltage);
 
   
@@ -76,6 +84,7 @@ void loop() {
     trigger_activated = false;
     saveData();   
   }
+  #endif
   
   frame_counter++;
   if (frame_counter % 1000 == 0)
