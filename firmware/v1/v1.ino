@@ -13,8 +13,8 @@ ArduinoQueue<float> readingQueue(QUEUE_SIZE); // approx one second.
 float trigger_voltage_mV = 30; // will save data if exceeded
 bool trigger_activated;
 
-#define OPERATION_MODE_PLOT 1 
-//#define OPERATION_MODE_CONTINUOUS_ACQUISITION 1
+//#define OPERATION_MODE_PLOT 1 
+#define OPERATION_MODE_CONTINUOUS_ACQUISITION 1
 //#define OPERATION_MODE_EVENT_TRIGGER 1
 
 
@@ -26,8 +26,8 @@ bool trigger_activated;
 unsigned long int frame_counter;
 unsigned long trigger_time;
 SdFat sd;
+SdFile logFileCA;
 const int chipSelect = 10;
-
 
 
 void setup() {
@@ -58,6 +58,9 @@ void setup() {
   //adc.setVoltageRange_mV(ADS1115_RANGE_0512);
   frame_counter = 0;
   trigger_activated = false;  
+
+  #ifdef OPERATION_MODE_CONTINUOUS_ACQUISITION
+  #endif
 }
 
 void loop() {
@@ -69,9 +72,27 @@ void loop() {
    Serial.println(voltage);
   #endif
 
-  #ifdef OPERATION_MODE_EVENT_TRIGGER
   readingQueue.enqueue(voltage);
 
+  #ifdef OPERATION_MODE_CONTINUOUS_ACQUISITION   
+   if (readingQueue.isFull())
+   {
+    //SdFile logFileCA;
+    //logFileCA.open("LOG.TXT",  O_RDWR | O_CREAT | O_AT_END); 
+    
+    logFileCA.open("LOG.TXT",   O_CREAT | O_APPEND | O_WRITE); 
+    while (!readingQueue.isEmpty())
+      {
+        float x = readingQueue.dequeue();   
+        String data_string = String(x);
+        logFileCA.println(data_string);      
+      }
+   logFileCA.close();
+   }
+  #endif
+  
+
+  #ifdef OPERATION_MODE_EVENT_TRIGGER
   
   if (fabs(voltage) > trigger_voltage_mV && trigger_activated == false)
   {
